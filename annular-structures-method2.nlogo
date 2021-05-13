@@ -74,9 +74,11 @@ to go
 
    ]
    ;; RULE 2 - hit object
-   if patch-ahead 1 != nobody and [pcolor] of patch-ahead 1 != 0 [ ; not black
+      if patch-ahead 1 != nobody and (any? patches in-radius vision-distance with [pcolor != 0]) [ ; not black
 
      back pluck_type * back_factor
+
+
 
      if pcolor != black [ ; no drop on another object
        let candidates neighbors with [pcolor = black]
@@ -109,7 +111,7 @@ to go
 
    ]
 
-
+  set-plucks
   set n_obj count patches with [pcolor != black]
   performance-metric
   tick
@@ -117,6 +119,17 @@ end
 
 to-report color_to_size [c]
   report (c - red) / 24
+end
+
+to set-plucks
+  ask patches [
+    ifelse pcolor = 0 [
+      set pluck -1
+    ]
+    [
+      set pluck color_to_size pcolor
+    ]
+  ]
 end
 
 to performance-metric
@@ -147,10 +160,10 @@ to performance-metric
     set i i + 1
   ]
 
-    set sep separation q_c p_c
-    set comp compactness
-    set shp shape-metric mean_x_c
-    set comp2 my_compactness
+   set sep separation q_c p_c
+   set comp compactness
+   set shp shape-metric mean_x_c
+   set comp2 my_compactness
 
   ;show item 1 mean_x_c
 end
@@ -206,12 +219,13 @@ to-report shape-metric [mean_x_c]
   ; colors = n of object types
   let c 1
 
-  let k count patches with [pluck = 0 and distance centroid 0 < mean_x / colors]
+  let k count patches with [pluck = 0 and distance centroid 0 < ((mean_x / colors) + 1.5)]
   let n_1 count patches with [pluck = 0]
 
+
+
+
   let contrib_bands []
-
-
 
   repeat colors - 2 [
     let distances [distance centroid 0] of patches with [pluck = c]
@@ -229,8 +243,6 @@ to-report my_compactness
   let max_d world-width / 2
 
   let optimal 3
-
-  show optimal
 
   report 100 * ( 1 - ( mean_x - optimal ) / (max_d - optimal))
 
@@ -271,7 +283,7 @@ SLIDER
 population
 population
 1
-100
+20
 6.0
 1
 1
@@ -373,7 +385,7 @@ cone
 cone
 2
 90
-90.0
+36.0
 2
 1
 °
@@ -388,7 +400,7 @@ vision-distance
 vision-distance
 0.1
 2
-2.0
+1.2
 .1
 1
 NIL
@@ -399,7 +411,7 @@ PLOT
 271
 1071
 510
-plot 1
+Metrics
 NIL
 NIL
 0.0
@@ -408,7 +420,7 @@ NIL
 100.0
 true
 true
-"" " set-plot-y-range 20 100\n"
+"" " set-plot-y-range 0 100\n"
 PENS
 "Separation" 1.0 0 -2674135 true "" "plot sep"
 "Compactness" 1.0 0 -13345367 true "" "plot comp"
@@ -456,7 +468,7 @@ back_factor
 back_factor
 1
 4
-1.0
+2.0
 .5
 1
 NIL
@@ -482,17 +494,6 @@ TEXTBOX
 12
 0.0
 1
-
-MONITOR
-134
-344
-230
-389
-My Compactness
-comp2
-3
-1
-11
 
 @#$#@#$#@
 ## WHAT IS IT?

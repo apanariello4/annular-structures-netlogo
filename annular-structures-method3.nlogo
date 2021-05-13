@@ -1,15 +1,14 @@
-extensions [ py ]
+extensions [table  py  ]
 
-globals [n_obj x y sep comp mean_x area shape_metric]
+globals [n_obj x y sep comp comp2 shp mean_x area colors integrator height_1 height_2 height_3 back_1 back_2 back_3]
 
-patches-own []
+patches-own [pluck]
 turtles-own []
 
 breed [ centroids centroid ]
 breed [ bugs bug ]
-breed [ objects object ]
 
-objects-own [carried]
+bugs-own [ pluck_type ]
 
 ;; SETUP
 
@@ -17,14 +16,13 @@ to setup
   clear-all
   set-default-shape bugs "bug"
   set-default-shape centroids "x"
-  set-default-shape objects "box"
 
   set area world-width * pi
+  set colors 3
 
-    create-centroids 1 [
+   create-centroids 1 [
     set size 3
     set color blue
-    setxy x y
     ]
 
   create-bugs population
@@ -35,14 +33,10 @@ to setup
     set hidden? true
       ]
     ]
-  ; ask patches [setup-patches]
-  create-objects n_objects
-   [
-
-    set color ( random colors ) * 24 + red
-    set size (color - 15) / 24 + 1 ; red = 15
-    setxy random world-width random world-height
-    ]
+  ask patches [setup-patches]
+  ask centroid 0 [
+    setxy mean [pxcor] of patches with [pcolor != black] mean [pycor] of patches with [pcolor != black]
+  ]
 
    py:setup py:python
   (py:run
@@ -55,12 +49,28 @@ end
 
 to setup-patches
   if ( random ( ( world-width ^ 2 ) / ( n_objects * colors ) ) ) < 1
-      [ set pcolor ( random colors ) * 24 + red ]
+      [ set pcolor ( random colors ) * 24 + red]
+  ifelse pcolor = 0 [
+    set pluck -1
+  ]
+  [
+    set pluck color_to_size pcolor
+  ]
 end
 
 to go
   ; black = 0
+  let MAX_HEIGHT 200
+  let BACK_PROPORTION .02
+  let integrator_1  (max (list (density_1 * height_1 * gravity) (0)))
+  let integrator_2  (max (list (( density_1 * height_1 + density_2 * height_2) * gravity) (0)))
+  let integrator_3  (max (list (( density_1 * height_1 + density_2 * height_2 + density_3 * height_3) * gravity) (0)))
 
+  set back_1 round (integrator_1 * BACK_PROPORTION * .7)
+  set back_2 round (integrator_2 * BACK_PROPORTION)
+  set back_3 round (integrator_3 * BACK_PROPORTION * 1.2)
+
+  set integrator (list (integrator_1) (integrator_2) (integrator_3))
 
   ask bugs [
 
@@ -68,138 +78,130 @@ to go
 
   ifelse ( color != blue ) [ ; Carrying objects
 
-   ;; RULE 1 - hit another robot
-   if patch-ahead 1 = nobody  or any? bugs-on patch-ahead 1  [
+   ;; RULE 1 - hit another robot or wall
+   if patch-ahead 1 = nobody [
      rt 180
      rt random 10
      lt random 10
+
    ]
    ;; RULE 2 - hit object
-   if patch-ahead 1 != nobody and [pcolor] of patch-ahead 1 != 0 [ ; not black
-     back 1
+      if patch-ahead 1 != nobody and (any? patches in-radius vision-distance with [pcolor != 0]) [ ; not black
 
-     if pcolor != black [
+      if pluck_type = 0 [
+          back back_1
+          set height_1 height_1 + 15
+        ]
+
+      if pluck_type = 1 [
+          back back_2
+          set height_2 height_2 + 15
+        ]
+
+      if pluck_type = 2 [
+          back back_3
+          set height_3 height_3 + 15
+        ]
+
+
+
+
+     if pcolor != black [ ; no drop on another object
        let candidates neighbors with [pcolor = black]
        if any? candidates [ move-to one-of candidates ]
      ]
 
      set pcolor color
      set color blue
-     rt one-of [ 90 270 ] ; randomly turn right or left
-     ]
-
-
-
-   ]
-
-   ;; RULE 3 - Not Carrying objects
-   [
-     if patch-ahead 1 = nobody [rt 180]
-     if pcolor > 0[
-       set color pcolor
-       set pcolor 0
-     ]
-     rt random 10
-     lt random 10
-   ]
-
-   fd 1
-   ]
-
-
-  set n_obj count objects
-  performance-metric
-  tick
-end
-
-to go-agents
-
-
-  ask bugs [
-  ifelse not show-ants [set hidden? true] [set hidden? false]
-
-  ifelse ( color != blue ) [ ; Carrying objects
-
-   ;; RULE 1 - hit another robot or wall
-   if patch-ahead 1 = nobody or any? other bugs-on patch-ahead 1[
-     rt 180
-     rt random 10
-     lt random 10
-    ]
-   ;; RULE 2 - hit object
-   if patch-ahead 1 != nobody and any? (objects in-cone vision-distance cone) with [carried = 0] [
-
-     back [size] of one-of link-neighbors * 1.5
-     ask link-neighbors [ set carried 0 ]
-     ask my-links [die]
-
-     ;show "dropped object"
-     set color blue
+     set pluck_type (-1)
+     back 1
      rt one-of [ 90 270 ] ; randomly turn right or left
 
      ]
-
-
     fd 1
    ]
 
-   ;; RULE 3 - Not Carrying objects
-   [
-     if patch-ahead 1 = nobody [rt 180]
-
-     if any? (objects in-cone vision-distance cone) with [carried = 0][
-    ; show "picked up object"
-
-       create-link-with one-of (objects in-cone vision-distance cone) with [carried = 0] [ tie ]
-       set color [color] of one-of link-neighbors
-       ask link-neighbors [set carried 1]
-       ]
-
-
-     rt random 10
-     lt random 10
+   [ ;; RULE 3 - Not Carrying objects
+     if patch-ahead 1 = nobody [rt 180] ; hit a wall
+     if any? patches in-radius vision-distance with [pcolor != 0]
+      [
+       move-to one-of patches in-radius vision-distance with [pcolor != 0]
+       set color pcolor
+       set pcolor 0
+       set pluck_type color_to_size color
+     ]
+     rt random 15
+     lt random 15
      fd 1
    ]
 
+
    ]
+
+  set-plucks
+  set n_obj count patches with [pcolor != black]
+  if ticks mod 4 = 0[
+    set height_1 max (list (height_1 - 1) (0))
+    set height_1 min (list (height_1) (MAX_HEIGHT))
+    set height_2 max (list (height_2 - 1) (0))
+    set height_2 min (list (height_2) (MAX_HEIGHT))
+    set height_3 max (list (height_3 - 1) (0))
+    set height_3 min (list (height_3) (MAX_HEIGHT))
+  ]
+
   performance-metric
   tick
+end
 
+to-report color_to_size [c]
+  report (c - red) / 24
+end
+
+to set-plucks
+  ask patches [
+    ifelse pcolor = 0 [
+      set pluck -1
+    ]
+    [
+      set pluck color_to_size pcolor
+    ]
+  ]
 end
 
 to performance-metric
-  let i 1
+  let i 0
   let n_c []
   let mean_x_c [] ; mean distance to centre for objects of type c
   let q_c [] ; lower quartile of distances x_c for type c
   let p_c [] ; upper quartile
-  set mean_x mean [distance centroid 0] of objects with [carried = 0]
-  set n_obj count objects
+  set mean_x mean [distance centroid 0] of patches with [pcolor != black]
+  set n_obj count patches with [pcolor != black]
 
-  set x mean [xcor] of objects with [ carried = 0]
-  set y mean [ycor] of objects with [ carried = 0]
+  set x mean [pxcor] of patches with [pcolor != black]
+  set y mean [pycor] of patches with [pcolor != black]
 
   ask centroid 0 [setxy x y ]
 
-  let x_c [distance centroid 0] of objects with [size = 1]
+  ; let x_c [distance centroid 0] of objects with [size = 1]
 
 
   repeat colors [
 
-    let distances sort [distance centroid 0] of objects with [size = i and carried = 0]
-    set n_c lput count objects with [size = i] n_c
+    let distances [distance centroid 0] of patches with [pluck = i]
+    ;set n_c lput count objects with [size = i] n_c
     set mean_x_c lput mean distances mean_x_c
 
     set q_c lput lower-quartile distances q_c
     set p_c lput upper-quartile distances p_c
     set i i + 1
   ]
-;  set sep separation q_c p_c
-;  set comp compactness
-  set sep sep + (random 0.3)
-  set sep sep - (random 0.1)
-  set comp comp + random 0.2
-  set comp comp - random 0.1
+
+   set sep separation q_c p_c
+   set comp compactness
+   set shp shape-metric mean_x_c
+   set comp2 my_compactness
+
+  ;show item 1 mean_x_c
 end
 
 to-report upper-quartile [ xs ]
@@ -215,22 +217,22 @@ to-report lower-quartile [ xs ]
 end
 
 to-report separation [q_c p_c]
-  let k 2
-  ; central type: distance to the centre greater than the lower quartile range of any other type
-  let central count objects with [size = 1 and distance centroid 0 > max q_c]
+  let k 1
+  ;central type: distance to the centre greater than the lower quartile range of any other type
+  let central count patches with [pluck = 0 and distance centroid 0 > max q_c]
   ; outer type: distance to the centre less than the upper quartile range of any other type
-  let outer count objects with [size = colors and distance centroid 0 < min p_c]
+  let outer count patches with [pluck = (colors - 1) and distance centroid 0 < min p_c]
 
   let intermediate_sum []
 
   repeat colors - 2 [
-    let intermediate_greater count objects with [size = k and distance centroid 0 > max q_c] / 2
-    let intermediate_less count objects with [size = k and distance centroid 0 < min p_c] / 2
+    let intermediate_greater count patches with [pluck = k and distance centroid 0 > min q_c] / 4
+    let intermediate_less count patches with [pluck = k and distance centroid 0 < max p_c] / 4
     set intermediate_sum lput ( intermediate_greater + intermediate_less ) intermediate_sum
     set k k + 1
   ]
   ;show (word "c " central " o " outer " i " intermediate_sum " obj " n_obj)
-  report 100 * ( 1 - ( ( central + outer + ( sum intermediate_sum ) ) / count objects ) )
+  report 100 * ( 1 - ( ( central + outer + ( sum intermediate_sum ) ) / count patches with [pluck != -1] ) )
 end
 
 to-report compactness
@@ -244,18 +246,52 @@ to-report compactness
 
   ;show (word "mean " normalize_mean " opt " opt_D " dis " [distance centroid 0] of object 20)
 
-  report 80 * ( 1 - ( normalize_mean - opt_D ) / (max_mean - opt_D))
+  report 100 * ( 1 - ( normalize_mean - opt_D ) / (max_mean - opt_D))
+
+end
+
+to-report shape-metric [mean_x_c]
+  ; Shape Metric = (Cluster Percentage + Sum of performances for each band)/ number of object types
+  ; colors = n of object types
+  let c 1
+
+  let k count patches with [pluck = 0 and distance centroid 0 < ((mean_x / colors) + 1.5)]
+  let n_1 count patches with [pluck = 0]
+
+
+
+
+  let contrib_bands []
+
+  repeat colors - 2 [
+    let distances [distance centroid 0] of patches with [pluck = c]
+    set distances map [n -> abs( n - (item c mean_x_c))] distances
+    set contrib_bands lput (100 * ( 1 - ( ( sum distances ) / ( count patches with [pluck = c] * (item c mean_x_c))))) contrib_bands
+    set c c + 1
+  ]
+
+
+  report ( 100 * (k / n_1) + sum contrib_bands / colors )
+end
+
+to-report my_compactness
+
+  let max_d world-width / 2
+
+  let optimal 3
+
+  report 100 * ( 1 - ( mean_x - optimal ) / (max_d - optimal))
 
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
-233
+226
 10
 731
-509
+516
 -1
 -1
-10.0
+6.81
 1
 10
 1
@@ -266,55 +302,40 @@ GRAPHICS-WINDOW
 0
 1
 0
-48
+72
 0
-48
-1
-1
+72
+0
+0
 1
 ticks
-30.0
+60.0
 
 SLIDER
-36
-120
-208
-153
+41
+61
+213
+94
 population
 population
 1
-100
-15.0
+20
+6.0
 1
 1
 ants
 HORIZONTAL
 
 SLIDER
-35
-162
-207
-195
+41
+134
+213
+167
 n_objects
 n_objects
 1
 100
-45.0
-1
-1
-NIL
-HORIZONTAL
-
-SLIDER
-33
-204
-205
-237
-colors
-colors
-1
-5
-3.0
+21.0
 1
 1
 NIL
@@ -355,10 +376,10 @@ NIL
 1
 
 MONITOR
-33
-308
-213
-353
+30
+239
+167
+284
 Mean distance to centroid
 mean_x
 3
@@ -366,58 +387,41 @@ mean_x
 11
 
 SWITCH
-33
-253
+43
+175
+215
 208
-286
 show-ants
 show-ants
 0
 1
 -1000
 
-BUTTON
-76
-75
-169
-108
-NIL
-go-agents
-T
-1
-T
-OBSERVER
-NIL
-NIL
-NIL
-NIL
-1
-
 SLIDER
-868
-67
-1040
-100
+748
+10
+920
+43
 cone
 cone
 2
-60
-34.0
+90
+40.0
 2
 1
 °
 HORIZONTAL
 
 SLIDER
-870
-128
-1042
-161
+748
+54
+920
+87
 vision-distance
 vision-distance
 0.1
 2
-1.1
+1.5
 .1
 1
 NIL
@@ -428,7 +432,7 @@ PLOT
 271
 1071
 510
-plot 1
+Metrics
 NIL
 NIL
 0.0
@@ -437,16 +441,17 @@ NIL
 100.0
 true
 true
-"" ""
+"" " set-plot-y-range 0 100\n"
 PENS
-"Separation" 1.0 0 -16777216 true "" "plot sep"
-"Compactness" 1.0 0 -13345367 true "" "plot comp"
+"Separation" 1.0 0 -2674135 true "" "if ticks > 10 [plot sep]"
+"Compactness" 1.0 0 -13345367 true "" "if ticks > 10 [plot comp]"
+"Shape" 1.0 0 -13840069 true "" "if ticks > 10 [plot shp]"
 
 MONITOR
-32
-366
-106
-411
+30
+291
+104
+336
 Separation
 sep
 3
@@ -454,15 +459,127 @@ sep
 11
 
 MONITOR
-122
-368
-212
-413
+136
+293
+226
+338
 Compactness
 comp
+3
+1
+11
+
+MONITOR
+175
+239
+225
+284
+NIL
+n_obj
 17
 1
 11
+
+MONITOR
+30
+344
+87
+389
+Shape
+shp
+3
+1
+11
+
+TEXTBOX
+84
+223
+234
+241
+----- Metrics ------
+12
+0.0
+1
+
+SLIDER
+748
+108
+920
+141
+gravity
+gravity
+1
+20
+1.0
+1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+748
+156
+920
+189
+density_1
+density_1
+1
+20
+1.0
+1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+748
+191
+920
+224
+density_2
+density_2
+1
+20
+1.0
+1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+748
+225
+920
+258
+density_3
+density_3
+1
+20
+1.0
+1
+1
+NIL
+HORIZONTAL
+
+PLOT
+1118
+125
+1286
+525
+Integrators
+NIL
+NIL
+0.0
+3.0
+0.0
+600.0
+false
+false
+"" "clear-plot"
+PENS
+"default" 1.0 1 -2674135 true "" "plot item 0 integrator"
+"pen-1" 1.0 1 -16777216 true "" "plotxy 0 0\nplot item 1 integrator"
+"pen-2" 1.0 1 -10899396 true "" "plotxy 1 0\nplot item 2 integrator"
 
 @#$#@#$#@
 ## WHAT IS IT?
