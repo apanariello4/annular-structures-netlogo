@@ -194,12 +194,9 @@ to performance-metric
     set p_c lput upper-quartile distances p_c
     set i i + 1
   ]
-;  set sep separation q_c p_c
-;  set comp compactness
-  set sep sep + (random 0.3)
-  set sep sep - (random 0.1)
-  set comp comp + random 0.2
-  set comp comp - random 0.1
+  set sep separation q_c p_c
+  set comp compactness
+
 end
 
 to-report upper-quartile [ xs ]
@@ -299,7 +296,7 @@ n_objects
 n_objects
 1
 100
-45.0
+33.0
 1
 1
 NIL
@@ -321,30 +318,13 @@ NIL
 HORIZONTAL
 
 BUTTON
-57
-24
-122
-57
+92
+23
+157
+56
 NIL
 setup\n
 NIL
-1
-T
-OBSERVER
-NIL
-NIL
-NIL
-NIL
-1
-
-BUTTON
-130
-24
-193
-57
-NIL
-go
-T
 1
 T
 OBSERVER
@@ -402,7 +382,7 @@ cone
 cone
 2
 60
-34.0
+40.0
 2
 1
 °
@@ -460,7 +440,7 @@ MONITOR
 413
 Compactness
 comp
-17
+3
 1
 11
 
